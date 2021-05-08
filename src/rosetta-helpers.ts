@@ -214,7 +214,7 @@ function makeFeeOperation(tx: BaseTx): RosettaOperation {
     status: getTxStatus(DbTxStatus.Success),
     account: { address: tx.sender_address },
     amount: {
-      value: (0n - tx.fee_rate).toString(10),
+      value: (0n - unwrapOptional(tx.fee_rate, () => 'Unexpected nullish amount')).toString(10),
       currency: getStxCurrencyMetadata(),
     },
   };
@@ -231,7 +231,7 @@ function makeBurnOperation(tx: DbStxEvent, baseTx: BaseTx, index: number): Roset
       address: unwrapOptional(baseTx.sender_address, () => 'Unexpected nullish sender_address'),
     },
     amount: {
-      value: '-' + unwrapOptional(tx.amount, () => 'Unexpected nullish amount').toString(10),
+      value: (0n - unwrapOptional(tx.amount, () => 'Unexpected nullish amount')).toString(10),
       currency: getStxCurrencyMetadata(),
     },
   };
@@ -267,12 +267,10 @@ function makeSenderOperation(tx: BaseTx, index: number): RosettaOperation {
       address: unwrapOptional(tx.sender_address, () => 'Unexpected nullish sender_address'),
     },
     amount: {
-      value:
-        '-' +
-        unwrapOptional(
-          tx.token_transfer_amount,
-          () => 'Unexpected nullish token_transfer_amount'
-        ).toString(10),
+      value: (
+        0n -
+        unwrapOptional(tx.token_transfer_amount, () => 'Unexpected nullish token_transfer_amount')
+      ).toString(10),
       currency: getStxCurrencyMetadata(),
     },
     coin_change: {

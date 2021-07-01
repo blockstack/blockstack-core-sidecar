@@ -135,7 +135,7 @@ export async function getOperations(
 export function processUnlockingEvents(events: StxUnlockEvent[], operations: RosettaOperation[]) {
   events.forEach(event => {
     operations.push(makeStakeUnlockOperation(event, operations.length));
-  })
+  });
 }
 
 export function processEvents(events: DbEvent[], baseTx: BaseTx, operations: RosettaOperation[]) {
@@ -222,10 +222,7 @@ function makeStakeLockOperation(
   return lock;
 }
 
-function makeStakeUnlockOperation(
-  tx: StxUnlockEvent,
-  index: number
-): RosettaOperation {
+function makeStakeUnlockOperation(tx: StxUnlockEvent, index: number): RosettaOperation {
   const unlock_metadata: any = {};
   unlock_metadata.tx_id = tx.tx_id;
   const unlock: RosettaOperation = {

@@ -1,7 +1,7 @@
 import * as path from 'path';
 import { EventEmitter } from 'events';
 import PgMigrate, { RunnerOption } from 'node-pg-migrate';
-import { Client, ClientBase, ClientConfig, Pool, PoolClient, QueryConfig, QueryResult } from 'pg';
+import { Pool, PoolClient, ClientConfig, Client, ClientBase, QueryResult, QueryConfig } from 'pg';
 
 import {
   APP_DIR,

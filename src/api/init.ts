@@ -24,7 +24,7 @@ import { createRosettaMempoolRouter } from './routes/rosetta/mempool';
 import { createRosettaBlockRouter } from './routes/rosetta/block';
 import { createRosettaAccountRouter } from './routes/rosetta/account';
 import { createRosettaConstructionRouter } from './routes/rosetta/construction';
-import { isProdEnv, logError, logger } from '../helpers';
+import { isProdEnv, logError, logger, LogLevel } from '../helpers';
 import { createWsRpcRouter } from './routes/ws-rpc';
 import { createSocketIORouter } from './routes/socket-io';
 import { createBurnchainRouter } from './routes/burnchain';
@@ -38,6 +38,7 @@ import { ChainID } from '@stacks/transactions';
 import * as pathToRegex from 'path-to-regexp';
 import * as expressListEndpoints from 'express-list-endpoints';
 import { createMiddleware as createPrometheusMiddleware } from '@promster/express';
+import { createMicroblockRouter } from './routes/microblock';
 
 export interface ApiServer {
   expressApp: ExpressWithAsync;
@@ -49,7 +50,15 @@ export interface ApiServer {
   terminate: () => Promise<void>;
 }
 
-export async function startApiServer(datastore: DataStore, chainId: ChainID): Promise<ApiServer> {
+export async function startApiServer({
+  datastore,
+  chainId,
+  httpLogLevel,
+}: {
+  datastore: DataStore;
+  chainId: ChainID;
+  httpLogLevel?: LogLevel;
+}): Promise<ApiServer> {
   const app = addAsync(express());
 
   const apiHost = process.env['STACKS_BLOCKCHAIN_API_HOST'];
@@ -104,10 +113,18 @@ export async function startApiServer(datastore: DataStore, chainId: ChainID): Pr
   // Setup request logging
   app.use(
     expressWinston.logger({
-      winstonInstance: logger,
+      format: logger.format,
+      transports: logger.transports,
       metaField: (null as unknown) as string,
+      statusLevels: {
+        error: 'error',
+        warn: httpLogLevel ?? 'http',
+        success: httpLogLevel ?? 'http',
+      },
     })
   );
+
+  app.set('json spaces', 2);
 
   app.get('/', (req, res) => {
     res.redirect(`/extended/v1/status`);
@@ -121,6 +138,7 @@ export async function startApiServer(datastore: DataStore, chainId: ChainID): Pr
       router.use(cors());
       router.use('/tx', createTxRouter(datastore));
       router.use('/block', createBlockRouter(datastore));
+      router.use('/microblock', createMicroblockRouter(datastore));
       router.use('/burnchain', createBurnchainRouter(datastore));
       router.use('/contract', createContractRouter(datastore));
       router.use('/address', createAddressRouter(datastore, chainId));

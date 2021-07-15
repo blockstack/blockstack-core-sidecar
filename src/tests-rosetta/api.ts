@@ -76,8 +76,8 @@ describe('Rosetta API', () => {
     await cycleMigrations();
     db = await PgDataStore.connect();
     client = await db.pool.connect();
-    eventServer = await startEventServer({ db, chainId: ChainID.Testnet });
-    api = await startApiServer(db, ChainID.Testnet);
+    eventServer = await startEventServer({ datastore: db, chainId: ChainID.Testnet });
+    api = await startApiServer({ datastore: db, chainId: ChainID.Testnet });
   });
 
   test('network/list', async () => {
@@ -158,7 +158,7 @@ describe('Rosetta API', () => {
     const block = await new Promise<DbBlock>(resolve =>
       api.datastore.once('blockUpdate', block => resolve(block))
     );
-    const genesisBlock = await api.datastore.getBlockByHeight(1);
+    const genesisBlock = await api.datastore.getBlock({ height: 1 });
     assert(genesisBlock.found);
     const query1 = await supertest(api.address)
       .post(`/rosetta/v1/network/status`)
@@ -193,7 +193,7 @@ describe('Rosetta API', () => {
 
   test('block - by index', async () => {
     const blockHeight = 2;
-    const block = await api.datastore.getBlockByHeight(blockHeight);
+    const block = await api.datastore.getBlock({ height: blockHeight });
     assert(block.found);
     const txs = await api.datastore.getBlockTxsRows(block.result.block_hash);
     assert(txs.found);
@@ -237,7 +237,7 @@ describe('Rosetta API', () => {
 
   test('block - by hash', async () => {
     const blockHeight = 2;
-    const block = await api.datastore.getBlockByHeight(blockHeight);
+    const block = await api.datastore.getBlock({ height: blockHeight });
     assert(block.found);
     const txs = await api.datastore.getBlockTxsRows(block.result.block_hash);
     assert(txs.found);
@@ -331,7 +331,7 @@ describe('Rosetta API', () => {
     const submitResult = await new StacksCoreRpcClient().sendTransaction(transferTx.serialize());
     expect(submitResult.txId).toBe(expectedTxId);
     await broadcastTx;
-    const txDb = await api.datastore.getTx(expectedTxId);
+    const txDb = await api.datastore.getTx({ txId: expectedTxId, includeUnanchored: false });
     assert(txDb.found);
     const query1 = await supertest(api.server)
       .post(`/rosetta/v1/block/transaction`)
@@ -408,6 +408,7 @@ describe('Rosetta API', () => {
       const mempoolTx: DbMempoolTx = {
         pruned: false,
         tx_id: `0x891200000000000000000000000000000000000000000000000000000000000${i}`,
+        anchor_mode: 3,
         nonce: 0,
         raw_tx: Buffer.from('test-raw-tx'),
         type_id: DbTxTypeId.Coinbase,
@@ -417,6 +418,7 @@ describe('Rosetta API', () => {
         post_conditions: Buffer.from([0x01, 0xf5]),
         fee_rate: 1234n,
         sponsored: false,
+        sponsor_address: undefined,
         sender_address: 'sender-addr',
         origin_hash_mode: 1,
       };
@@ -461,6 +463,7 @@ describe('Rosetta API', () => {
     const mempoolTx: DbMempoolTx = {
       pruned: false,
       tx_id: '0x8912000000000000000000000000000000000000000000000000000000000000',
+      anchor_mode: 3,
       nonce: 0,
       raw_tx: Buffer.from('test-raw-tx'),
       type_id: DbTxTypeId.Coinbase,
@@ -470,6 +473,7 @@ describe('Rosetta API', () => {
       post_conditions: Buffer.from([0x01, 0xf5]),
       fee_rate: 1234n,
       sponsored: false,
+      sponsor_address: undefined,
       sender_address: 'sender-addr',
       origin_hash_mode: 1,
     };
@@ -582,7 +586,7 @@ describe('Rosetta API', () => {
     expect(result1.status).toBe(200);
     expect(result1.type).toBe('application/json');
 
-    const block = await api.datastore.getBlockByHeight(1);
+    const block = await api.datastore.getBlock({ height: 1 });
     assert(block.found);
 
     const amount: RosettaAmount = {

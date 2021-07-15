@@ -46,11 +46,7 @@ import {
   DbTxTypeId,
 } from './datastore/common';
 import { getTxSenderAddress, getTxSponsorAddress } from './event-stream/reader';
-import {
-  assertNotNullish as unwrapOptional,
-  bufferToHexPrefixString,
-  hexToBuffer,
-} from './helpers';
+import { unwrapOptional, bufferToHexPrefixString, hexToBuffer } from './helpers';
 import { readTransaction, TransactionPayloadTypeID } from './p2p/tx';
 
 import { getCoreNodeEndpoint } from './core-rpc/client';
@@ -333,7 +329,7 @@ function makeCallContractOperation(tx: BaseTx, index: number): RosettaOperation 
           contract_call_function_args: bufferToHexPrefixString(
             tx.contract_call_function_args ? tx.contract_call_function_args : Buffer.from('')
           ),
-          raw_result: tx.raw_result,
+          raw_result: (tx as DbTx).raw_result ?? '',
         },
       },
     },
@@ -550,6 +546,7 @@ export function rawTxToBaseTx(raw_tx: string): BaseTx {
   const dbtx: BaseTx = {
     token_transfer_recipient_address: recipientAddr,
     tx_id: txId,
+    anchor_mode: 3,
     type_id: transactionType,
     status: '' as any,
     nonce: Number(transaction.auth.originCondition.nonce),

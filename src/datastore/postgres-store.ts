@@ -4,61 +4,62 @@ import PgMigrate, { RunnerOption } from 'node-pg-migrate';
 import { Pool, PoolClient, ClientConfig, Client, ClientBase, QueryResult, QueryConfig } from 'pg';
 
 import {
-  parsePort,
   APP_DIR,
-  isTestEnv,
-  isDevEnv,
-  bufferToHexPrefixString,
-  hexToBuffer,
-  stopwatch,
-  timeout,
-  logger,
-  logError,
-  FoundOrNot,
-  getOrAdd,
   assertNotNullish,
   batchIterate,
+  bufferToHexPrefixString,
+  FoundOrNot,
+  getOrAdd,
+  hexToBuffer,
+  isDevEnv,
+  isTestEnv,
+  logError,
+  logger,
+  parsePort,
+  stopwatch,
+  timeout,
 } from '../helpers';
 import {
-  DataStore,
-  DbBlock,
-  DbTx,
-  DbStxEvent,
-  DbFtEvent,
-  DbNftEvent,
-  DbTxTypeId,
-  DbSmartContractEvent,
-  DbSmartContract,
-  DbEvent,
-  DbFaucetRequest,
-  DataStoreEventEmitter,
-  DbEventTypeId,
-  DataStoreUpdateData,
-  DbFaucetRequestCurrency,
-  DbMempoolTx,
-  DbMempoolTxId,
-  DbSearchResult,
-  DbStxBalance,
-  DbStxLockEvent,
-  DbFtBalance,
-  DbMinerReward,
-  DbBurnchainReward,
-  DbInboundStxTransfer,
-  DbTxStatus,
   AddressNftEventIdentifier,
-  DbRewardSlotHolder,
+  DataStore,
+  DataStoreEventEmitter,
+  DataStoreUpdateData,
+  DbBlock,
   DbBnsName,
   DbBnsNamespace,
-  DbBnsZoneFile,
   DbBnsSubdomain,
+  DbBnsZoneFile,
+  DbBurnchainReward,
   DbConfigState,
+  DbEvent,
+  DbEventTypeId,
+  DbFaucetRequest,
+  DbFaucetRequestCurrency,
+  DbFtBalance,
+  DbFtEvent,
+  DbInboundStxTransfer,
+  DbMempoolTx,
+  DbMempoolTxId,
+  DbMinerReward,
+  DbNftEvent,
+  DbRewardSlotHolder,
+  DbSearchResult,
+  DbSmartContract,
+  DbSmartContractEvent,
+  DbStxBalance,
+  DbStxEvent,
+  DbStxLockEvent,
   DbTokenOfferingLocked,
+  DbTx,
+  DbTxStatus,
+  DbTxTypeId,
   DbTxWithStxTransfers,
+  StxUnlockEvent,
 } from './common';
 import {
   AddressTokenOfferingLocked,
-  TransactionType,
   AddressUnlockSchedule,
+  TransactionType,
 } from '@stacks/stacks-blockchain-api-types';
 import { getTxTypeId } from '../api/controllers/db-controller';
 
@@ -1583,12 +1584,10 @@ export class PgDataStore
     });
   }
 
-  async getMinerRewards({
+  async getMinersRewardsAtHeight({
     blockHeight,
-    rewardRecipient,
   }: {
     blockHeight: number;
-    rewardRecipient?: string;
   }): Promise<DbMinerReward[]> {
     return this.query(async client => {
       const queryResults = await client.query<{
@@ -4051,6 +4050,54 @@ export class PgDataStore
         return { found: false } as const;
       }
     });
+  }
+
+  async getUnlockedAddressesAtBlock(block: DbBlock): Promise<StxUnlockEvent[]> {
+    return this.queryTx(async client => {
+      return await this.internalGetUnlockedAccountsAtHeight(client, block);
+    });
+  }
+
+  async internalGetUnlockedAccountsAtHeight(
+    client: ClientBase,
+    block: DbBlock
+  ): Promise<StxUnlockEvent[]> {
+    const current_burn_height = block.burn_block_height;
+    let previous_burn_height = block.burn_block_height;
+    if (block.block_height > 1) {
+      const previous_block = await this.getBlockByHeight(block.block_height - 1);
+      if (previous_block.found) {
+        previous_burn_height = previous_block.result.burn_block_height;
+      }
+    }
+
+    const lockQuery = await client.query<{
+      locked_amount: string;
+      unlock_height: string;
+      block_height: string;
+      locked_address: string;
+      tx_id: Buffer;
+    }>(
+      `
+      SELECT locked_amount, unlock_height, block_height, tx_id, locked_address
+      FROM stx_lock_events
+      WHERE canonical = true AND unlock_height <= $1 AND unlock_height > $2
+      `,
+      [current_burn_height, previous_burn_height]
+    );
+
+    const result: StxUnlockEvent[] = [];
+    lockQuery.rows.forEach(row => {
+      const unlockEvent: StxUnlockEvent = {
+        unlock_height: row.unlock_height,
+        unlocked_amount: row.locked_amount,
+        stacker_address: row.locked_address,
+        tx_id: bufferToHexPrefixString(row.tx_id),
+      };
+      result.push(unlockEvent);
+    });
+
+    return result;
   }
 
   async close(): Promise<void> {

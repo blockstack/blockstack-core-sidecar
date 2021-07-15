@@ -254,6 +254,13 @@ export interface DbNftEvent extends DbContractAssetEvent {
   value: Buffer;
 }
 
+export interface StxUnlockEvent {
+  tx_id: string;
+  unlock_height: string;
+  stacker_address: string;
+  unlocked_amount: string;
+}
+
 export type DbEvent = DbSmartContractEvent | DbStxEvent | DbStxLockEvent | DbFtEvent | DbNftEvent;
 
 export interface DbTxWithStxTransfers {
@@ -598,18 +605,13 @@ export interface DataStore extends DataStoreEventEmitter {
     results: string[];
   }>;
   getSubdomain(args: { subdomain: string }): Promise<FoundOrNot<DbBnsSubdomain>>;
-  getMinerRewards({
-    blockHeight,
-    rewardRecipient,
-  }: {
-    blockHeight: number;
-    rewardRecipient?: string;
-  }): Promise<DbMinerReward[]>;
+  getMinersRewardsAtHeight({ blockHeight }: { blockHeight: number }): Promise<DbMinerReward[]>;
   getTokenOfferingLocked(
     address: string,
     blockHeight: number
   ): Promise<FoundOrNot<AddressTokenOfferingLocked>>;
   close(): Promise<void>;
+  getUnlockedAddressesAtBlock(block: DbBlock): Promise<StxUnlockEvent[]>;
 }
 
 export function getAssetEventId(event_index: number, event_tx_id: string): string {
